@@ -409,6 +409,11 @@
                 <button id="toggle-moons" onclick="toggleMoons()" data-en="Hide Moons" data-zh="隐藏卫星">Hide Moons</button>
                 <button id="toggle-asteroids" onclick="toggleAsteroids()" data-en="Hide Asteroids" data-zh="隐藏小行星">Hide Asteroids</button>
             </div>
+            
+            <div class="control-group">
+                <label data-en="Mobile Settings" data-zh="移动设备设置">Mobile Settings</label>
+                <button id="toggle-haptic" onclick="toggleHaptic()" data-en="Haptic: ON" data-zh="触觉反馈: 开">Haptic: ON</button>
+            </div>
         </div>
 
         <div id="planet-info">
@@ -449,6 +454,7 @@
         let followMode = false;
         let cameraOffset = { x: 0, y: 20, z: 50 };
         let showTooltip = true;
+        let hapticEnabled = true;
 
         // Planet data
         const planetData = {
@@ -925,18 +931,48 @@
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
             
-            renderer.domElement.addEventListener('click', (event) => {
-                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            // Handle both click and touch events
+            function handleInteraction(event) {
+                let clientX, clientY;
+                
+                if (event.type === 'touchend') {
+                    if (event.changedTouches.length === 0) return;
+                    clientX = event.changedTouches[0].clientX;
+                    clientY = event.changedTouches[0].clientY;
+                    
+                    // Haptic feedback for planet selection
+                    triggerHaptic('medium');
+                } else {
+                    clientX = event.clientX;
+                    clientY = event.clientY;
+                }
+                
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
                 
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects([sun, ...planets, ...moons]);
                 
                 if (intersects.length > 0) {
                     const clickedObject = intersects[0].object;
+                    
+                    // Enhanced haptic feedback based on object type
+                    if (isMobileDevice()) {
+                        if (clickedObject === sun) {
+                            triggerHaptic('heavy'); // Sun gets strong feedback
+                        } else if (planets.includes(clickedObject)) {
+                            triggerHaptic('medium'); // Planets get medium feedback
+                        } else if (moons.includes(clickedObject)) {
+                            triggerHaptic('light'); // Moons get light feedback
+                        }
+                    }
+                    
                     showPlanetInfo(clickedObject.userData);
                 }
-            });
+            }
+            
+            renderer.domElement.addEventListener('click', handleInteraction);
+            renderer.domElement.addEventListener('touchend', handleInteraction);
         }
 
         function showPlanetInfo(userData) {
@@ -1107,6 +1143,9 @@
             showOrbits = !showOrbits;
             const button = document.getElementById('toggle-orbits');
             
+            // Haptic feedback for toggle action
+            triggerHaptic('medium');
+            
             scene.children.forEach(child => {
                 if (child.userData.type === 'orbit') {
                     child.visible = showOrbits;
@@ -1122,6 +1161,9 @@
             showMoons = !showMoons;
             const button = document.getElementById('toggle-moons');
             
+            // Haptic feedback for toggle action
+            triggerHaptic('medium');
+            
             moons.forEach(moon => {
                 moon.visible = showMoons;
             });
@@ -1135,6 +1177,9 @@
             showAsteroids = !showAsteroids;
             const button = document.getElementById('toggle-asteroids');
             
+            // Haptic feedback for toggle action
+            triggerHaptic('medium');
+            
             asteroids.forEach(asteroid => {
                 asteroid.visible = showAsteroids;
             });
@@ -1144,9 +1189,28 @@
                 (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
         }
 
+        function toggleHaptic() {
+            hapticEnabled = !hapticEnabled;
+            const button = document.getElementById('toggle-haptic');
+            
+            // Test haptic feedback when enabling
+            if (hapticEnabled) {
+                triggerHaptic('success');
+            }
+            
+            button.textContent = hapticEnabled ? 
+                (currentLanguage === 'en' ? 'Haptic: ON' : '触觉反馈: 开') : 
+                (currentLanguage === 'en' ? 'Haptic: OFF' : '触觉反馈: 关');
+            
+            button.classList.toggle('active', hapticEnabled);
+        }
+
         function setObservationCenter(centerKey) {
             observationCenter = centerKey;
             followMode = false;
+            
+            // Haptic feedback for observation center change
+            triggerHaptic('success');
             
             // Update follow button text
             const followBtn = document.getElementById('follow-btn');
@@ -1323,9 +1387,80 @@
             }
         }
 
+        // Haptic feedback functions
+        function triggerHaptic(type = 'light') {
+            if (!hapticEnabled || !isMobileDevice()) return;
+            
+            try {
+                if (navigator.vibrate) {
+                    // Vibration patterns for different feedback types
+                    const patterns = {
+                        light: [10],           // Quick tap
+                        medium: [20],          // Button press
+                        heavy: [50],           // Important action
+                        success: [10, 50, 10], // Success pattern
+                        error: [100, 50, 100], // Error pattern
+                        selection: [5, 10, 5]  // Selection feedback
+                    };
+                    
+                    navigator.vibrate(patterns[type] || patterns.light);
+                }
+                
+                // iOS Haptic Feedback (if available)
+                if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS 13+ haptic feedback
+                    if (window.navigator.vibrate) {
+                        window.navigator.vibrate(type === 'heavy' ? [50] : [10]);
+                    }
+                }
+            } catch (error) {
+                console.log('Haptic feedback not supported:', error);
+            }
+        }
+
+        // Enhanced button click with haptic feedback
+        function hapticButtonClick(element, callback, feedbackType = 'medium') {
+            triggerHaptic(feedbackType);
+            
+            // Visual feedback
+            element.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                element.style.transform = 'scale(1)';
+            }, 100);
+            
+            // Execute callback
+            if (callback) callback();
+        }
+
         // Touch event optimizations
         function setupTouchEvents() {
             if (!isMobileDevice()) return;
+            
+            // Add haptic feedback to all buttons
+            document.querySelectorAll('button').forEach(button => {
+                button.addEventListener('touchstart', (e) => {
+                    triggerHaptic('light');
+                }, { passive: true });
+            });
+            
+            // Add haptic feedback to select elements
+            document.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    triggerHaptic('selection');
+                }, { passive: true });
+            });
+            
+            // Add haptic feedback to range sliders
+            document.querySelectorAll('input[type="range"]').forEach(slider => {
+                let lastValue = slider.value;
+                slider.addEventListener('input', (e) => {
+                    // Only trigger haptic on significant value changes
+                    if (Math.abs(e.target.value - lastValue) > 0.2) {
+                        triggerHaptic('light');
+                        lastValue = e.target.value;
+                    }
+                }, { passive: true });
+            });
             
             // Prevent default touch behaviors that might interfere
             document.addEventListener('touchstart', (e) => {
