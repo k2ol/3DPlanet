@@ -94,6 +94,55 @@
             display: none;
         }
 
+        #observation-tooltip {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0, 50, 100, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #4CAF50;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        #observation-tooltip h4 {
+            color: #4CAF50;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        #observation-tooltip p {
+            margin: 0;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+
+        .tooltip-toggle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 101;
+            background: #4CAF50;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tooltip-toggle:hover {
+            background: #45a049;
+        }
+
         #planet-info h3 {
             color: #4CAF50;
             margin-bottom: 10px;
@@ -213,6 +262,13 @@
             <p><strong data-en="Description:" data-zh="描述:">Description:</strong></p>
             <p id="planet-description"></p>
         </div>
+
+        <div id="observation-tooltip">
+            <h4 id="tooltip-title" data-en="Observing from the Sun" data-zh="从太阳观测">Observing from the Sun</h4>
+            <p id="tooltip-content" data-en="You are observing the solar system from the Sun's perspective. All planets orbit around your position." data-zh="您正在从太阳的角度观察太阳系。所有行星都围绕您的位置运行。">You are observing the solar system from the Sun's perspective. All planets orbit around your position.</p>
+        </div>
+
+        <button class="tooltip-toggle" onclick="toggleTooltip()" title="Toggle Educational Tips">?</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -234,6 +290,7 @@
         let observationCenter = 'sun';
         let followMode = false;
         let cameraOffset = { x: 0, y: 20, z: 50 };
+        let showTooltip = true;
 
         // Planet data
         const planetData = {
@@ -435,6 +492,73 @@
                 },
                 diameter: '49,528 km',
                 period: '165 years'
+            }
+        };
+
+        // Educational tooltips for each observation center
+        const observationTooltips = {
+            sun: {
+                title: { en: 'Observing from the Sun', zh: '从太阳观测' },
+                content: { 
+                    en: 'You are at the center of our solar system! From here, you can see all planets orbiting around you. Notice how inner planets (Mercury, Venus, Earth, Mars) move faster than outer planets. The Sun\'s immense gravity keeps everything in orbit.',
+                    zh: '您位于太阳系的中心！从这里，您可以看到所有行星围绕您运行。注意内行星（水星、金星、地球、火星）比外行星移动得更快。太阳巨大的引力使一切都保持在轨道上。'
+                }
+            },
+            mercury: {
+                title: { en: 'Observing from Mercury', zh: '从水星观测' },
+                content: { 
+                    en: 'From Mercury, the Sun appears 2.5 times larger than from Earth! You\'re on the fastest planet - completing an orbit in just 88 Earth days. Venus and Earth appear as bright "stars" in your sky, while outer planets are barely visible.',
+                    zh: '从水星看，太阳比从地球看大2.5倍！您在最快的行星上——仅用88个地球日就完成一次轨道运行。金星和地球在您的天空中显得像明亮的"星星"，而外行星几乎看不见。'
+                }
+            },
+            venus: {
+                title: { en: 'Observing from Venus', zh: '从金星观测' },
+                content: { 
+                    en: 'Venus has the thickest atmosphere of any rocky planet! From here, Earth appears as a blue dot, while Mercury zips quickly between you and the Sun. The outer planets are distant points of light in your cloudy, greenhouse-effect sky.',
+                    zh: '金星拥有所有岩石行星中最厚的大气层！从这里，地球看起来像一个蓝点，而水星在您和太阳之间快速移动。外行星在您多云的温室效应天空中是遥远的光点。'
+                }
+            },
+            earth: {
+                title: { en: 'Observing from Earth', zh: '从地球观测' },
+                content: { 
+                    en: 'Welcome home! From Earth, you can see the Moon orbiting nearby. Mercury and Venus appear as "morning" and "evening stars." Mars shows a reddish tint, while Jupiter and Saturn are visible as bright dots. This is the view that inspired humanity to explore space!',
+                    zh: '欢迎回家！从地球上，您可以看到月球在附近运行。水星和金星显得像"晨星"和"昏星"。火星呈现红色，而木星和土星看起来像明亮的点。正是这种景象激发了人类探索太空！'
+                }
+            },
+            mars: {
+                title: { en: 'Observing from Mars', zh: '从火星观测' },
+                content: { 
+                    en: 'From Mars, Earth and Venus appear as bright blue and white dots. You can see Phobos and Deimos, Mars\' two small moons. The asteroid belt is much closer here - you\'re on the edge of the inner solar system looking out at the gas giants.',
+                    zh: '从火星看，地球和金星看起来像明亮的蓝色和白色点。您可以看到火卫一和火卫二，火星的两颗小卫星。小行星带在这里更近——您在内太阳系的边缘向外看气态巨行星。'
+                }
+            },
+            jupiter: {
+                title: { en: 'Observing from Jupiter', zh: '从木星观测' },
+                content: { 
+                    en: 'You\'re on the largest planet! Jupiter\'s 95 moons create a mini solar system. The four largest moons (Io, Europa, Ganymede, Callisto) are easily visible. From here, the inner planets appear very close to the Sun, while Saturn shows its rings clearly.',
+                    zh: '您在最大的行星上！木星的95颗卫星形成了一个迷你太阳系。四颗最大的卫星（木卫一、木卫二、木卫三、木卫四）清晰可见。从这里，内行星看起来非常靠近太阳，而土星清楚地显示其环。'
+                }
+            },
+            saturn: {
+                title: { en: 'Observing from Saturn', zh: '从土星观测' },
+                content: { 
+                    en: 'Saturn\'s magnificent rings dominate your view! With 146 moons, including giant Titan with its thick atmosphere, you\'re in a complex system. The inner planets are now just bright points near the distant Sun, while Uranus and Neptune are faint neighbors.',
+                    zh: '土星壮丽的环主导着您的视野！拥有146颗卫星，包括有着厚厚大气层的巨大土卫六，您处在一个复杂的系统中。内行星现在只是遥远太阳附近的明亮点，而天王星和海王星是微弱的邻居。'
+                }
+            },
+            uranus: {
+                title: { en: 'Observing from Uranus', zh: '从天王星观测' },
+                content: { 
+                    en: 'Uranus rotates on its side, giving you a unique perspective! From this ice giant, the Sun appears as just a bright star. The inner solar system is a distant cluster of lights, while Neptune is your only nearby planetary companion in the outer darkness.',
+                    zh: '天王星侧着旋转，给您独特的视角！从这个冰巨星看，太阳只是一颗明亮的星星。内太阳系是一个遥远的光点群，而海王星是您在外层黑暗中唯一的近邻行星伙伴。'
+                }
+            },
+            neptune: {
+                title: { en: 'Observing from Neptune', zh: '从海王星观测' },
+                content: { 
+                    en: 'You\'re at the edge of our solar system! From Neptune, the Sun is 900 times dimmer than from Earth. The entire inner solar system appears as a small cluster of lights. You\'re in the realm of the Kuiper Belt, where dwarf planets and comets originate.',
+                    zh: '您在太阳系的边缘！从海王星看，太阳比从地球看暗900倍。整个内太阳系看起来像一小群光点。您在柯伊伯带的领域，矮行星和彗星的起源地。'
+                }
             }
         };
 
@@ -762,6 +886,9 @@
             
             // Update toggle buttons
             updateToggleButtonTexts();
+            
+            // Update observation tooltip
+            updateObservationTooltip(observationCenter);
         }
 
         function setViewMode(mode) {
@@ -848,6 +975,9 @@
             
             // Reset camera controls
             controls.enabled = true;
+            
+            // Update educational tooltip
+            updateObservationTooltip(centerKey);
             
             // Move camera to new observation center
             const centerObject = getCenterObject(centerKey);
@@ -937,6 +1067,33 @@
             asteroidBtn.textContent = showAsteroids ? 
                 (currentLanguage === 'en' ? 'Hide Asteroids' : '隐藏小行星') : 
                 (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
+        }
+
+        function updateObservationTooltip(centerKey) {
+            if (!showTooltip) return;
+            
+            const tooltip = observationTooltips[centerKey];
+            if (tooltip) {
+                document.getElementById('tooltip-title').textContent = tooltip.title[currentLanguage];
+                document.getElementById('tooltip-content').textContent = tooltip.content[currentLanguage];
+            }
+        }
+
+        function toggleTooltip() {
+            showTooltip = !showTooltip;
+            const tooltipElement = document.getElementById('observation-tooltip');
+            const toggleButton = document.querySelector('.tooltip-toggle');
+            
+            if (showTooltip) {
+                tooltipElement.style.display = 'block';
+                toggleButton.textContent = '?';
+                toggleButton.title = 'Hide Educational Tips';
+                updateObservationTooltip(observationCenter);
+            } else {
+                tooltipElement.style.display = 'none';
+                toggleButton.textContent = '!';
+                toggleButton.title = 'Show Educational Tips';
+            }
         }
 
         // Handle window resize
