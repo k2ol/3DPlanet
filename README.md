@@ -1,1 +1,10 @@
-# 3DPlanet
+A comprehensive 3D solar system visualization built with Three.js and HTML.
+
+## File Structure
+```
+├── index.html          # Main HTML file with UI
+````
+
+-  **Language Support**: English and Chinese (中文)
+- 2D or 3D two model
+- Chick the planet information display
