@@ -16,6 +16,14 @@
             background: #000;
             color: #fff;
             overflow: hidden;
+            touch-action: none; /* Prevent default touch behaviors */
+        }
+
+        /* Mobile-first responsive design */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
         }
 
         #container {
@@ -33,6 +41,54 @@
             padding: 20px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        /* Mobile responsive controls */
+        @media (max-width: 768px) {
+            #controls {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                padding: 15px;
+                max-height: 60vh;
+                transform: translateY(-100%);
+                opacity: 0;
+                pointer-events: none;
+            }
+            
+            #controls.mobile-open {
+                transform: translateY(0);
+                opacity: 1;
+                pointer-events: all;
+            }
+            
+            .mobile-controls-toggle {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                z-index: 101;
+                background: #4CAF50;
+                border: none;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .mobile-controls-toggle {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+            }
         }
 
         .control-group {
@@ -55,6 +111,37 @@
             cursor: pointer;
             font-size: 14px;
             transition: background 0.3s;
+            touch-action: manipulation; /* Optimize for touch */
+        }
+
+        /* Mobile button adjustments */
+        @media (max-width: 768px) {
+            .control-group {
+                margin-bottom: 12px;
+            }
+            
+            .control-group label {
+                font-size: 13px;
+                margin-bottom: 8px;
+            }
+            
+            button {
+                padding: 12px 16px;
+                margin: 3px;
+                font-size: 13px;
+                min-height: 44px; /* iOS touch target minimum */
+                min-width: 44px;
+            }
+            
+            select {
+                min-height: 44px !important;
+                font-size: 13px !important;
+            }
+            
+            input[type="range"] {
+                height: 44px;
+                margin: 8px 0;
+            }
         }
 
         button:hover {
@@ -94,6 +181,39 @@
             display: none;
         }
 
+        /* Mobile planet info adjustments */
+        @media (max-width: 768px) {
+            #planet-info {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                right: auto;
+                max-width: 90vw;
+                max-height: 80vh;
+                overflow-y: auto;
+                padding: 15px;
+            }
+            
+            #planet-info h3 {
+                font-size: 18px;
+                margin-bottom: 12px;
+            }
+            
+            #planet-info p {
+                font-size: 14px;
+                margin-bottom: 10px;
+            }
+            
+            .close-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 18px;
+                top: 8px;
+                right: 8px;
+            }
+        }
+
         #observation-tooltip {
             position: absolute;
             bottom: 20px;
@@ -107,6 +227,29 @@
             border-left: 4px solid #4CAF50;
             max-height: 150px;
             overflow-y: auto;
+        }
+
+        /* Mobile tooltip adjustments */
+        @media (max-width: 768px) {
+            #observation-tooltip {
+                position: fixed;
+                bottom: 80px;
+                left: 10px;
+                right: 10px;
+                padding: 12px;
+                max-height: 120px;
+                font-size: 13px;
+            }
+            
+            #observation-tooltip h4 {
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+            
+            #observation-tooltip p {
+                font-size: 12px;
+                line-height: 1.3;
+            }
         }
 
         #observation-tooltip h4 {
@@ -137,6 +280,19 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            touch-action: manipulation;
+        }
+
+        /* Mobile tooltip toggle adjustments */
+        @media (max-width: 768px) {
+            .tooltip-toggle {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
         }
 
         .tooltip-toggle:hover {
@@ -202,6 +358,8 @@
         <div class="spinner"></div>
         <p data-en="Loading Solar System..." data-zh="正在加载太阳系...">Loading Solar System...</p>
     </div>
+
+    <button class="mobile-controls-toggle" onclick="toggleMobileControls()">☰</button>
 
     <div id="container">
         <div id="controls">
@@ -582,6 +740,20 @@
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             
+            // Mobile-specific control settings
+            if (isMobileDevice()) {
+                controls.enablePan = true;
+                controls.enableZoom = true;
+                controls.enableRotate = true;
+                controls.rotateSpeed = 0.5;
+                controls.zoomSpeed = 0.8;
+                controls.panSpeed = 0.8;
+                controls.touches = {
+                    ONE: THREE.TOUCH.ROTATE,
+                    TWO: THREE.TOUCH.DOLLY_PAN
+                };
+            }
+            
             // Add lighting
             const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
             scene.add(ambientLight);
@@ -598,6 +770,14 @@
             createPlanets();
             createMoons();
             createAsteroidBelt();
+            
+            // Setup mobile optimizations
+            setupTouchEvents();
+            
+            // Initial mobile layout adjustment
+            if (isMobileDevice()) {
+                adjustMobileLayout();
+            }
             
             // Hide loading screen
             document.getElementById('loading').classList.add('hidden');
@@ -1096,12 +1276,73 @@
             }
         }
 
+        // Mobile device detection
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (window.innerWidth <= 768);
+        }
+
+        // Mobile controls toggle
+        function toggleMobileControls() {
+            const controls = document.getElementById('controls');
+            const toggle = document.querySelector('.mobile-controls-toggle');
+            
+            controls.classList.toggle('mobile-open');
+            
+            if (controls.classList.contains('mobile-open')) {
+                toggle.innerHTML = '✕';
+                toggle.style.background = '#f44336';
+            } else {
+                toggle.innerHTML = '☰';
+                toggle.style.background = '#4CAF50';
+            }
+        }
+
         // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Adjust mobile layout if needed
+            if (isMobileDevice()) {
+                adjustMobileLayout();
+            }
         });
+
+        // Adjust mobile layout
+        function adjustMobileLayout() {
+            const tooltip = document.getElementById('observation-tooltip');
+            const planetInfo = document.getElementById('planet-info');
+            
+            // Ensure mobile-friendly positioning
+            if (window.innerHeight < 600) {
+                tooltip.style.maxHeight = '80px';
+            } else {
+                tooltip.style.maxHeight = '120px';
+            }
+        }
+
+        // Touch event optimizations
+        function setupTouchEvents() {
+            if (!isMobileDevice()) return;
+            
+            // Prevent default touch behaviors that might interfere
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('#controls') || e.target.closest('#planet-info')) {
+                    return; // Allow normal touch behavior for UI elements
+                }
+            }, { passive: true });
+            
+            // Optimize touch performance
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+            }, { passive: false });
+            
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+            }, { passive: false });
+        }
 
         // Keyboard shortcuts for quick planet switching
         window.addEventListener('keydown', (event) => {

@@ -8,3 +8,4 @@ A comprehensive 3D solar system visualization built with Three.js and HTML.
 -  **Language Support**: English and Chinese (中文)
 - 2D or 3D two model
 - onclick  planet information display
+- Automatically adapts to cell phone screens and computer screens
