@@ -65,6 +65,22 @@
             background: #2196F3;
         }
 
+        select {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            margin: 5px;
+            min-width: 120px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
         #planet-info {
             position: absolute;
             top: 20px;
@@ -165,6 +181,22 @@
             </div>
             
             <div class="control-group">
+                <label data-en="Observation Center" data-zh="观测中心">Observation Center</label>
+                <select id="observation-center" onchange="setObservationCenter(this.value)">
+                    <option value="sun" data-en="Sun" data-zh="太阳">Sun</option>
+                    <option value="mercury" data-en="Mercury" data-zh="水星">Mercury</option>
+                    <option value="venus" data-en="Venus" data-zh="金星">Venus</option>
+                    <option value="earth" data-en="Earth" data-zh="地球">Earth</option>
+                    <option value="mars" data-en="Mars" data-zh="火星">Mars</option>
+                    <option value="jupiter" data-en="Jupiter" data-zh="木星">Jupiter</option>
+                    <option value="saturn" data-en="Saturn" data-zh="土星">Saturn</option>
+                    <option value="uranus" data-en="Uranus" data-zh="天王星">Uranus</option>
+                    <option value="neptune" data-en="Neptune" data-zh="海王星">Neptune</option>
+                </select>
+                <button onclick="followPlanet()" id="follow-btn" data-en="Follow Planet" data-zh="跟随行星">Follow Planet</button>
+            </div>
+            
+            <div class="control-group">
                 <label data-en="Display Options" data-zh="显示选项">Display Options</label>
                 <button id="toggle-orbits" onclick="toggleOrbits()" data-en="Hide Orbits" data-zh="隐藏轨道">Hide Orbits</button>
                 <button id="toggle-moons" onclick="toggleMoons()" data-en="Hide Moons" data-zh="隐藏卫星">Hide Moons</button>
@@ -199,6 +231,9 @@
         let showOrbits = true;
         let showMoons = true;
         let showAsteroids = true;
+        let observationCenter = 'sun';
+        let followMode = false;
+        let cameraOffset = { x: 0, y: 20, z: 50 };
 
         // Planet data
         const planetData = {
@@ -688,6 +723,9 @@
                 });
             }
             
+            // Update camera position based on observation center
+            updateCameraPosition();
+            
             controls.update();
             renderer.render(scene, camera);
         }
@@ -704,6 +742,26 @@
             document.querySelectorAll('[data-en]').forEach(element => {
                 element.textContent = element.getAttribute(`data-${lang}`);
             });
+            
+            // Update select options
+            const select = document.getElementById('observation-center');
+            Array.from(select.options).forEach(option => {
+                const planetKey = option.value;
+                if (planetData[planetKey]) {
+                    option.textContent = planetData[planetKey].name[lang];
+                }
+            });
+            
+            // Update follow button if needed
+            const followBtn = document.getElementById('follow-btn');
+            if (followMode) {
+                followBtn.textContent = lang === 'en' ? 'Stop Following' : '停止跟随';
+            } else {
+                followBtn.textContent = lang === 'en' ? 'Follow Planet' : '跟随行星';
+            }
+            
+            // Update toggle buttons
+            updateToggleButtonTexts();
         }
 
         function setViewMode(mode) {
@@ -779,11 +837,139 @@
                 (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
         }
 
+        function setObservationCenter(centerKey) {
+            observationCenter = centerKey;
+            followMode = false;
+            
+            // Update follow button text
+            const followBtn = document.getElementById('follow-btn');
+            followBtn.textContent = currentLanguage === 'en' ? 'Follow Planet' : '跟随行星';
+            followBtn.classList.remove('active');
+            
+            // Reset camera controls
+            controls.enabled = true;
+            
+            // Move camera to new observation center
+            const centerObject = getCenterObject(centerKey);
+            if (centerObject) {
+                const targetPos = centerObject.position.clone();
+                targetPos.add(new THREE.Vector3(cameraOffset.x, cameraOffset.y, cameraOffset.z));
+                
+                // Smooth camera transition
+                animateCameraTo(targetPos, centerObject.position);
+            }
+        }
+
+        function followPlanet() {
+            followMode = !followMode;
+            const followBtn = document.getElementById('follow-btn');
+            
+            if (followMode) {
+                followBtn.textContent = currentLanguage === 'en' ? 'Stop Following' : '停止跟随';
+                followBtn.classList.add('active');
+                controls.enabled = false; // Disable manual camera control
+            } else {
+                followBtn.textContent = currentLanguage === 'en' ? 'Follow Planet' : '跟随行星';
+                followBtn.classList.remove('active');
+                controls.enabled = true; // Enable manual camera control
+            }
+        }
+
+        function getCenterObject(centerKey) {
+            if (centerKey === 'sun') {
+                return sun;
+            }
+            return planets.find(planet => planet.userData.planetKey === centerKey);
+        }
+
+        function updateCameraPosition() {
+            if (!followMode) return;
+            
+            const centerObject = getCenterObject(observationCenter);
+            if (centerObject) {
+                const targetPos = centerObject.position.clone();
+                targetPos.add(new THREE.Vector3(cameraOffset.x, cameraOffset.y, cameraOffset.z));
+                
+                camera.position.lerp(targetPos, 0.05);
+                camera.lookAt(centerObject.position);
+            }
+        }
+
+        function animateCameraTo(targetPosition, lookAtPosition) {
+            const startPos = camera.position.clone();
+            const startTime = Date.now();
+            const duration = 2000; // 2 seconds
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Smooth easing function
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                camera.position.lerpVectors(startPos, targetPosition, easeProgress);
+                camera.lookAt(lookAtPosition);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Update controls target
+                    controls.target.copy(lookAtPosition);
+                    controls.update();
+                }
+            }
+            
+            animate();
+        }
+
+        function updateToggleButtonTexts() {
+            const orbitBtn = document.getElementById('toggle-orbits');
+            orbitBtn.textContent = showOrbits ? 
+                (currentLanguage === 'en' ? 'Hide Orbits' : '隐藏轨道') : 
+                (currentLanguage === 'en' ? 'Show Orbits' : '显示轨道');
+                
+            const moonBtn = document.getElementById('toggle-moons');
+            moonBtn.textContent = showMoons ? 
+                (currentLanguage === 'en' ? 'Hide Moons' : '隐藏卫星') : 
+                (currentLanguage === 'en' ? 'Show Moons' : '显示卫星');
+                
+            const asteroidBtn = document.getElementById('toggle-asteroids');
+            asteroidBtn.textContent = showAsteroids ? 
+                (currentLanguage === 'en' ? 'Hide Asteroids' : '隐藏小行星') : 
+                (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
+        }
+
         // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Keyboard shortcuts for quick planet switching
+        window.addEventListener('keydown', (event) => {
+            const keyMap = {
+                '1': 'sun',
+                '2': 'mercury', 
+                '3': 'venus',
+                '4': 'earth',
+                '5': 'mars',
+                '6': 'jupiter',
+                '7': 'saturn',
+                '8': 'uranus',
+                '9': 'neptune'
+            };
+            
+            if (keyMap[event.key]) {
+                document.getElementById('observation-center').value = keyMap[event.key];
+                setObservationCenter(keyMap[event.key]);
+            }
+            
+            // Space bar to toggle follow mode
+            if (event.code === 'Space') {
+                event.preventDefault();
+                followPlanet();
+            }
         });
 
         // Initialize when page loads
