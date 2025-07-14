@@ -163,6 +163,13 @@
                 <input type="range" id="speed-slider" min="0.1" max="5" step="0.1" value="1" onchange="setAnimationSpeed(this.value)">
                 <span id="speed-value">1x</span>
             </div>
+            
+            <div class="control-group">
+                <label data-en="Display Options" data-zh="显示选项">Display Options</label>
+                <button id="toggle-orbits" onclick="toggleOrbits()" data-en="Hide Orbits" data-zh="隐藏轨道">Hide Orbits</button>
+                <button id="toggle-moons" onclick="toggleMoons()" data-en="Hide Moons" data-zh="隐藏卫星">Hide Moons</button>
+                <button id="toggle-asteroids" onclick="toggleAsteroids()" data-en="Hide Asteroids" data-zh="隐藏小行星">Hide Asteroids</button>
+            </div>
         </div>
 
         <div id="planet-info">
@@ -182,11 +189,16 @@
         // Global variables
         let scene, camera, renderer, controls;
         let planets = [];
+        let moons = [];
+        let asteroids = [];
         let sun;
         let animationSpeed = 1;
         let isAnimating = true;
         let currentViewMode = '3d';
         let currentLanguage = 'en';
+        let showOrbits = true;
+        let showMoons = true;
+        let showAsteroids = true;
 
         // Planet data
         const planetData = {
@@ -236,11 +248,22 @@
                 speed: 0.01,
                 color: 0x6B93D6,
                 description: {
-                    en: 'Earth is the third planet from the Sun and the only known planet to harbor life.',
-                    zh: '地球是距离太阳第三近的行星，也是已知唯一有生命存在的行星。'
+                    en: 'Earth is the third planet from the Sun and the only known planet to harbor life. It has one natural satellite, the Moon.',
+                    zh: '地球是距离太阳第三近的行星，也是已知唯一有生命存在的行星。它有一颗天然卫星——月球。'
                 },
                 diameter: '12,756 km',
-                period: '365 days'
+                period: '365 days',
+                moons: [{
+                    name: { en: 'Moon', zh: '月球' },
+                    radius: 0.3,
+                    distance: 3,
+                    speed: 0.05,
+                    color: 0xC0C0C0,
+                    description: {
+                        en: 'The Moon is Earth\'s only natural satellite and the fifth largest moon in the Solar System.',
+                        zh: '月球是地球唯一的天然卫星，也是太阳系中第五大的卫星。'
+                    }
+                }]
             },
             mars: {
                 name: { en: 'Mars', zh: '火星' },
@@ -262,11 +285,57 @@
                 speed: 0.005,
                 color: 0xD8CA9D,
                 description: {
-                    en: 'Jupiter is the largest planet in our solar system and is known for its Great Red Spot.',
-                    zh: '木星是太阳系中最大的行星，以其大红斑而闻名。'
+                    en: 'Jupiter is the largest planet in our solar system and is known for its Great Red Spot. It has 95 known moons including the four largest: Io, Europa, Ganymede, and Callisto.',
+                    zh: '木星是太阳系中最大的行星，以其大红斑而闻名。它有95颗已知卫星，包括四颗最大的：木卫一、木卫二、木卫三和木卫四。'
                 },
                 diameter: '142,984 km',
-                period: '12 years'
+                period: '12 years',
+                moons: [
+                    {
+                        name: { en: 'Io', zh: '木卫一' },
+                        radius: 0.2,
+                        distance: 5,
+                        speed: 0.08,
+                        color: 0xFFFF99,
+                        description: {
+                            en: 'Io is the most volcanically active body in the Solar System.',
+                            zh: '木卫一是太阳系中火山活动最活跃的天体。'
+                        }
+                    },
+                    {
+                        name: { en: 'Europa', zh: '木卫二' },
+                        radius: 0.18,
+                        distance: 6.5,
+                        speed: 0.06,
+                        color: 0xADD8E6,
+                        description: {
+                            en: 'Europa has a subsurface ocean that may harbor life.',
+                            zh: '木卫二有一个可能孕育生命的地下海洋。'
+                        }
+                    },
+                    {
+                        name: { en: 'Ganymede', zh: '木卫三' },
+                        radius: 0.25,
+                        distance: 8,
+                        speed: 0.04,
+                        color: 0x8B7D6B,
+                        description: {
+                            en: 'Ganymede is the largest moon in the Solar System.',
+                            zh: '木卫三是太阳系中最大的卫星。'
+                        }
+                    },
+                    {
+                        name: { en: 'Callisto', zh: '木卫四' },
+                        radius: 0.22,
+                        distance: 10,
+                        speed: 0.03,
+                        color: 0x696969,
+                        description: {
+                            en: 'Callisto is the most heavily cratered object in the Solar System.',
+                            zh: '木卫四是太阳系中陨石坑最多的天体。'
+                        }
+                    }
+                ]
             },
             saturn: {
                 name: { en: 'Saturn', zh: '土星' },
@@ -275,11 +344,36 @@
                 speed: 0.003,
                 color: 0xFAD5A5,
                 description: {
-                    en: 'Saturn is the sixth planet from the Sun and is famous for its prominent ring system.',
-                    zh: '土星是距离太阳第六近的行星，以其突出的环系统而闻名。'
+                    en: 'Saturn is the sixth planet from the Sun and is famous for its prominent ring system. It has 146 known moons, with Titan being the largest.',
+                    zh: '土星是距离太阳第六近的行星，以其突出的环系统而闻名。它有146颗已知卫星，其中土卫六是最大的。'
                 },
                 diameter: '120,536 km',
-                period: '29 years'
+                period: '29 years',
+                hasRings: true,
+                moons: [
+                    {
+                        name: { en: 'Titan', zh: '土卫六' },
+                        radius: 0.24,
+                        distance: 7,
+                        speed: 0.04,
+                        color: 0xFFA500,
+                        description: {
+                            en: 'Titan has a thick atmosphere and liquid methane lakes.',
+                            zh: '土卫六有浓厚的大气层和液态甲烷湖泊。'
+                        }
+                    },
+                    {
+                        name: { en: 'Enceladus', zh: '土卫二' },
+                        radius: 0.12,
+                        distance: 5,
+                        speed: 0.06,
+                        color: 0xF0F8FF,
+                        description: {
+                            en: 'Enceladus has geysers of water ice erupting from its south pole.',
+                            zh: '土卫二的南极有水冰间歇泉喷发。'
+                        }
+                    }
+                ]
             },
             uranus: {
                 name: { en: 'Uranus', zh: '天王星' },
@@ -343,6 +437,8 @@
             // Create sun and planets
             createSun();
             createPlanets();
+            createMoons();
+            createAsteroidBelt();
             
             // Hide loading screen
             document.getElementById('loading').classList.add('hidden');
@@ -408,7 +504,23 @@
                 });
                 const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
                 orbit.rotation.x = Math.PI / 2;
+                orbit.userData = { type: 'orbit' };
                 scene.add(orbit);
+                
+                // Add rings for Saturn
+                if (data.hasRings) {
+                    const ringGeometry = new THREE.RingGeometry(data.radius + 0.5, data.radius + 2, 32);
+                    const ringMaterial = new THREE.MeshBasicMaterial({ 
+                        color: 0xC4A484, 
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const rings = new THREE.Mesh(ringGeometry, ringMaterial);
+                    rings.rotation.x = Math.PI / 2;
+                    rings.userData = { type: 'rings', parent: planet };
+                    scene.add(rings);
+                }
                 
                 planets.push(planet);
                 scene.add(planet);
@@ -416,6 +528,58 @@
             
             // Add click event listener
             addClickListener();
+        }
+
+        function createMoons() {
+            Object.keys(planetData).forEach(planetKey => {
+                if (planetKey === 'sun' || !planetData[planetKey].moons) return;
+                
+                const planetData_item = planetData[planetKey];
+                planetData_item.moons.forEach(moonData => {
+                    const geometry = new THREE.SphereGeometry(moonData.radius, 8, 8);
+                    const material = new THREE.MeshLambertMaterial({ color: moonData.color });
+                    const moon = new THREE.Mesh(geometry, material);
+                    
+                    moon.userData = {
+                        planetKey: planetKey,
+                        data: moonData,
+                        angle: Math.random() * Math.PI * 2,
+                        distance: moonData.distance,
+                        speed: moonData.speed,
+                        parentDistance: planetData_item.distance,
+                        type: 'moon'
+                    };
+                    
+                    moons.push(moon);
+                    scene.add(moon);
+                });
+            });
+        }
+
+        function createAsteroidBelt() {
+            // Create asteroid belt between Mars and Jupiter
+            for (let i = 0; i < 200; i++) {
+                const geometry = new THREE.SphereGeometry(Math.random() * 0.1 + 0.02, 4, 4);
+                const material = new THREE.MeshLambertMaterial({ color: 0x8C7853 });
+                const asteroid = new THREE.Mesh(geometry, material);
+                
+                const distance = 45 + Math.random() * 10; // Between Mars (40) and Jupiter (60)
+                const angle = Math.random() * Math.PI * 2;
+                
+                asteroid.position.x = Math.cos(angle) * distance;
+                asteroid.position.z = Math.sin(angle) * distance;
+                asteroid.position.y = (Math.random() - 0.5) * 2;
+                
+                asteroid.userData = {
+                    angle: angle,
+                    distance: distance,
+                    speed: 0.006 + Math.random() * 0.002,
+                    type: 'asteroid'
+                };
+                
+                asteroids.push(asteroid);
+                scene.add(asteroid);
+            }
         }
 
         function addClickListener() {
@@ -427,7 +591,7 @@
                 mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
                 
                 raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects([sun, ...planets]);
+                const intersects = raycaster.intersectObjects([sun, ...planets, ...moons]);
                 
                 if (intersects.length > 0) {
                     const clickedObject = intersects[0].object;
@@ -474,6 +638,53 @@
                     }
                     
                     planet.rotation.y += 0.01 * animationSpeed;
+                    
+                    // Update Saturn's rings
+                    scene.children.forEach(child => {
+                        if (child.userData.type === 'rings' && child.userData.parent === planet) {
+                            child.position.copy(planet.position);
+                        }
+                    });
+                });
+                
+                // Move moons around their planets
+                moons.forEach(moon => {
+                    if (!showMoons) return;
+                    
+                    const userData = moon.userData;
+                    userData.angle += userData.speed * animationSpeed;
+                    
+                    // Find parent planet position
+                    const parentPlanet = planets.find(p => p.userData.planetKey === userData.planetKey);
+                    if (parentPlanet) {
+                        const moonX = parentPlanet.position.x + Math.cos(userData.angle) * userData.distance;
+                        const moonZ = parentPlanet.position.z + Math.sin(userData.angle) * userData.distance;
+                        
+                        if (currentViewMode === '3d') {
+                            moon.position.set(moonX, 0, moonZ);
+                        } else {
+                            moon.position.set(moonX, 0, 0);
+                        }
+                    }
+                });
+                
+                // Move asteroids
+                asteroids.forEach(asteroid => {
+                    if (!showAsteroids) return;
+                    
+                    const userData = asteroid.userData;
+                    userData.angle += userData.speed * animationSpeed;
+                    
+                    if (currentViewMode === '3d') {
+                        asteroid.position.x = Math.cos(userData.angle) * userData.distance;
+                        asteroid.position.z = Math.sin(userData.angle) * userData.distance;
+                    } else {
+                        asteroid.position.x = Math.cos(userData.angle) * userData.distance;
+                        asteroid.position.z = 0;
+                    }
+                    
+                    asteroid.rotation.x += 0.02 * animationSpeed;
+                    asteroid.rotation.y += 0.01 * animationSpeed;
                 });
             }
             
@@ -525,6 +736,47 @@
         function resetView() {
             controls.reset();
             camera.position.set(0, 50, 100);
+        }
+
+        function toggleOrbits() {
+            showOrbits = !showOrbits;
+            const button = document.getElementById('toggle-orbits');
+            
+            scene.children.forEach(child => {
+                if (child.userData.type === 'orbit') {
+                    child.visible = showOrbits;
+                }
+            });
+            
+            button.textContent = showOrbits ? 
+                (currentLanguage === 'en' ? 'Hide Orbits' : '隐藏轨道') : 
+                (currentLanguage === 'en' ? 'Show Orbits' : '显示轨道');
+        }
+
+        function toggleMoons() {
+            showMoons = !showMoons;
+            const button = document.getElementById('toggle-moons');
+            
+            moons.forEach(moon => {
+                moon.visible = showMoons;
+            });
+            
+            button.textContent = showMoons ? 
+                (currentLanguage === 'en' ? 'Hide Moons' : '隐藏卫星') : 
+                (currentLanguage === 'en' ? 'Show Moons' : '显示卫星');
+        }
+
+        function toggleAsteroids() {
+            showAsteroids = !showAsteroids;
+            const button = document.getElementById('toggle-asteroids');
+            
+            asteroids.forEach(asteroid => {
+                asteroid.visible = showAsteroids;
+            });
+            
+            button.textContent = showAsteroids ? 
+                (currentLanguage === 'en' ? 'Hide Asteroids' : '隐藏小行星') : 
+                (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
         }
 
         // Handle window resize
