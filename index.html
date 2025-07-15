@@ -798,6 +798,17 @@
                 <button id="explore-planets" onclick="toggleExplorePlanetsMode()" data-en="Explore Planets" data-zh="探索行星">Explore Planets</button>
             </div>
             
+            <div class="control-group" id="explore-zoom-controls" style="display: none;">
+                <label data-en="Explore Zoom" data-zh="探索缩放">Explore Zoom</label>
+                <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                    <button onclick="zoomOut()" data-en="Zoom Out" data-zh="缩小" title="Zoom Out">−</button>
+                    <input type="range" id="explore-zoom-slider" min="0.5" max="5" step="0.1" value="1" onchange="setExploreZoom(this.value)" style="flex: 1; min-width: 100px;">
+                    <button onclick="zoomIn()" data-en="Zoom In" data-zh="放大" title="Zoom In">+</button>
+                    <span id="explore-zoom-value" style="min-width: 35px; text-align: center;">1x</span>
+                </div>
+                <button onclick="resetExploreZoom()" data-en="Reset Zoom" data-zh="重置缩放" style="margin-top: 5px;">Reset Zoom</button>
+            </div>
+            
             <div class="control-group">
                 <label data-en="Mobile Settings" data-zh="移动设备设置">Mobile Settings</label>
                 <button id="toggle-haptic" onclick="toggleHaptic()" data-en="Haptic: ON" data-zh="触觉反馈: 开">Haptic: ON</button>
@@ -845,6 +856,8 @@
         let hapticEnabled = true;
         let explorePlanetsMode = false;
         let selectedPlanetForExplore = null;
+        let exploreZoomLevel = 1;
+        let baseExploreDistance = 30;
 
         // Planet data
         const planetData = {
@@ -1449,25 +1462,17 @@
                         }
                     }
                     
-                    // In explore mode, handle planet interactions based on device type
+                    // In explore mode, clicking on sun exits explore mode
+                    if (explorePlanetsMode && clickedObject === sun) {
+                        deactivateExplorePlanetsMode();
+                        triggerHaptic('success'); // Success feedback for exiting
+                        return; // Don't show planet info when exiting
+                    }
+                    
+                    // In explore mode, clicking on planets just shows info (doesn't exit)
                     if (explorePlanetsMode && planets.includes(clickedObject)) {
-                        // For mobile devices, require double-tap to exit
-                        if (isMobileDevice() || isTabletDevice()) {
-                            if (tapCount >= 2) {
-                                deactivateExplorePlanetsMode();
-                                triggerHaptic('success'); // Success feedback for exiting
-                                return; // Don't show planet info when exiting
-                            } else {
-                                // Single tap - just show planet info, don't exit
-                                showPlanetInfo(clickedObject.userData);
-                                return;
-                            }
-                        } else {
-                            // Desktop - single click exits (original behavior)
-                            deactivateExplorePlanetsMode();
-                            triggerHaptic('success'); // Success feedback for exiting
-                            return; // Don't show planet info when exiting
-                        }
+                        showPlanetInfo(clickedObject.userData);
+                        return;
                     }
                     
                     // Activate Explore Planets mode when clicking on a planet (center area)
@@ -1475,27 +1480,15 @@
                         activateExplorePlanetsMode(clickedObject);
                     }
                     
-                    // Activate Explore Planets mode when clicking on the sun
+                    // Activate Explore Planets mode when clicking on the sun (only if not in explore mode)
                     if (clickedObject === sun && !explorePlanetsMode) {
                         activateExplorePlanetsMode(sun);
                     }
                     
                     showPlanetInfo(clickedObject.userData);
                 } else {
-                    // Clicking on empty space while in explore mode exits it
-                    if (explorePlanetsMode) {
-                        // For mobile devices, require double-tap on empty space too
-                        if (isMobileDevice() || isTabletDevice()) {
-                            if (tapCount >= 2) {
-                                deactivateExplorePlanetsMode();
-                                triggerHaptic('light');
-                            }
-                        } else {
-                            // Desktop - single click exits
-                            deactivateExplorePlanetsMode();
-                            triggerHaptic('light');
-                        }
-                    }
+                    // Clicking on empty space while in explore mode does nothing
+                    // (Only sun click or Exit button can exit explore mode now)
                 }
             }
             
@@ -1640,6 +1633,9 @@
             
             // Update toggle buttons
             updateToggleButtonTexts();
+            
+            // Update zoom controls text
+            updateZoomControlTexts();
             
             // Update observation tooltip
             updateObservationTooltip(observationCenter);
@@ -1791,8 +1787,9 @@
                     moon.visible = showMoons;
                 });
                 
-                // Center camera on the sun
-                camera.position.set(0, 50, 100);
+                // Center camera on the sun with zoom
+                const sunZoomDistance = baseExploreDistance * 3 / exploreZoomLevel;
+                camera.position.set(0, sunZoomDistance, sunZoomDistance * 2);
                 controls.target.set(0, 0, 0);
                 controls.update();
             } else {
@@ -1826,9 +1823,18 @@
                     }
                 });
                 
-                // Center camera on the selected planet
+                // Center camera on the selected planet with zoom
                 const planetPos = selectedPlanet.position;
-                camera.position.set(planetPos.x, planetPos.y + 20, planetPos.z + 30);
+                const zoomDistance = baseExploreDistance / exploreZoomLevel;
+                const planetRadius = selectedPlanet.userData.data.radius;
+                const minDistance = planetRadius * 3; // Minimum distance to avoid clipping
+                const actualDistance = Math.max(zoomDistance, minDistance);
+                
+                camera.position.set(
+                    planetPos.x, 
+                    planetPos.y + actualDistance * 0.7, 
+                    planetPos.z + actualDistance
+                );
                 controls.target.set(planetPos.x, planetPos.y, planetPos.z);
                 controls.update();
             }
@@ -1838,7 +1844,8 @@
                 asteroid.visible = false;
             });
             
-            // Update button text
+            // Show zoom controls and update button text
+            document.getElementById('explore-zoom-controls').style.display = 'block';
             const button = document.getElementById('explore-planets');
             button.textContent = currentLanguage === 'en' ? 'Exit Explore' : '退出探索';
         }
@@ -1880,7 +1887,12 @@
             controls.target.set(0, 0, 0);
             controls.update();
             
-            // Update button text
+            // Hide zoom controls and update button text
+            document.getElementById('explore-zoom-controls').style.display = 'none';
+            exploreZoomLevel = 1; // Reset zoom level
+            document.getElementById('explore-zoom-slider').value = 1;
+            document.getElementById('explore-zoom-value').textContent = '1x';
+            
             const button = document.getElementById('explore-planets');
             button.textContent = currentLanguage === 'en' ? 'Explore Planets' : '探索行星';
         }
@@ -1899,6 +1911,84 @@
                 (currentLanguage === 'en' ? 'Haptic: OFF' : '触觉反馈: 关');
             
             button.classList.toggle('active', hapticEnabled);
+        }
+
+        function setExploreZoom(zoom) {
+            exploreZoomLevel = parseFloat(zoom);
+            document.getElementById('explore-zoom-value').textContent = zoom + 'x';
+            
+            // Update camera position if in explore mode
+            if (explorePlanetsMode && selectedPlanetForExplore) {
+                updateExploreCameraPosition();
+            }
+            
+            // Haptic feedback for zoom change on mobile
+            if (isMobileDevice()) {
+                triggerHaptic('light');
+            }
+        }
+
+        function resetExploreZoom() {
+            exploreZoomLevel = 1;
+            document.getElementById('explore-zoom-slider').value = 1;
+            document.getElementById('explore-zoom-value').textContent = '1x';
+            
+            // Update camera position if in explore mode
+            if (explorePlanetsMode && selectedPlanetForExplore) {
+                updateExploreCameraPosition();
+            }
+            
+            // Haptic feedback for reset
+            triggerHaptic('medium');
+        }
+
+        function zoomIn() {
+            const currentZoom = parseFloat(document.getElementById('explore-zoom-slider').value);
+            const newZoom = Math.min(currentZoom + 0.2, 5); // Increase by 0.2, max 5
+            document.getElementById('explore-zoom-slider').value = newZoom;
+            setExploreZoom(newZoom);
+            
+            // Enhanced haptic feedback for button press
+            triggerHaptic('medium');
+        }
+
+        function zoomOut() {
+            const currentZoom = parseFloat(document.getElementById('explore-zoom-slider').value);
+            const newZoom = Math.max(currentZoom - 0.2, 0.5); // Decrease by 0.2, min 0.5
+            document.getElementById('explore-zoom-slider').value = newZoom;
+            setExploreZoom(newZoom);
+            
+            // Enhanced haptic feedback for button press
+            triggerHaptic('medium');
+        }
+
+        function updateExploreCameraPosition() {
+            if (!explorePlanetsMode || !selectedPlanetForExplore) return;
+            
+            const isExploringFromSun = selectedPlanetForExplore === sun;
+            
+            if (isExploringFromSun) {
+                // Update sun camera position with zoom
+                const sunZoomDistance = baseExploreDistance * 3 / exploreZoomLevel;
+                camera.position.set(0, sunZoomDistance, sunZoomDistance * 2);
+                controls.target.set(0, 0, 0);
+            } else {
+                // Update planet camera position with zoom
+                const planetPos = selectedPlanetForExplore.position;
+                const zoomDistance = baseExploreDistance / exploreZoomLevel;
+                const planetRadius = selectedPlanetForExplore.userData.data.radius;
+                const minDistance = planetRadius * 3; // Minimum distance to avoid clipping
+                const actualDistance = Math.max(zoomDistance, minDistance);
+                
+                camera.position.set(
+                    planetPos.x, 
+                    planetPos.y + actualDistance * 0.7, 
+                    planetPos.z + actualDistance
+                );
+                controls.target.set(planetPos.x, planetPos.y, planetPos.z);
+            }
+            
+            controls.update();
         }
 
         function setObservationCenter(centerKey) {
@@ -2012,6 +2102,27 @@
             exploreBtn.textContent = explorePlanetsMode ? 
                 (currentLanguage === 'en' ? 'Exit Explore' : '退出探索') : 
                 (currentLanguage === 'en' ? 'Explore Planets' : '探索行星');
+        }
+
+        function updateZoomControlTexts() {
+            // Update zoom control labels for language changes
+            const zoomControls = document.getElementById('explore-zoom-controls');
+            if (zoomControls) {
+                const label = zoomControls.querySelector('label');
+                if (label) {
+                    label.textContent = currentLanguage === 'en' ? 'Explore Zoom' : '探索缩放';
+                }
+                
+                // Update all buttons with data attributes
+                const buttons = zoomControls.querySelectorAll('button[data-en]');
+                buttons.forEach(button => {
+                    const enText = button.getAttribute('data-en');
+                    const zhText = button.getAttribute('data-zh');
+                    if (enText && zhText) {
+                        button.textContent = currentLanguage === 'en' ? enText : zhText;
+                    }
+                });
+            }
         }
 
         function updateObservationTooltip(centerKey) {
