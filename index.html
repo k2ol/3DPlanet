@@ -1421,6 +1421,7 @@
                 
                 if (intersects.length > 0) {
                     const clickedObject = intersects[0].object;
+                    const intersectionPoint = intersects[0].point;
                     
                     // Enhanced haptic feedback based on object type
                     if (isMobileDevice()) {
@@ -1433,12 +1434,37 @@
                         }
                     }
                     
-                    // Activate Explore Planets mode when clicking on a planet
-                    if (planets.includes(clickedObject)) {
+                    // Check if we're in explore mode and clicking on a planet's outer edge
+                    if (explorePlanetsMode && planets.includes(clickedObject)) {
+                        const planetCenter = clickedObject.position;
+                        const planetRadius = clickedObject.userData.data.radius;
+                        const distanceFromCenter = intersectionPoint.distanceTo(planetCenter);
+                        
+                        // If clicking on outer 30% of planet surface, exit explore mode
+                        if (distanceFromCenter > planetRadius * 0.7) {
+                            deactivateExplorePlanetsMode();
+                            triggerHaptic('success'); // Success feedback for exiting
+                            return; // Don't show planet info when exiting
+                        }
+                    }
+                    
+                    // Activate Explore Planets mode when clicking on a planet (center area)
+                    if (planets.includes(clickedObject) && !explorePlanetsMode) {
                         activateExplorePlanetsMode(clickedObject);
                     }
                     
+                    // Activate Explore Planets mode when clicking on the sun
+                    if (clickedObject === sun && !explorePlanetsMode) {
+                        activateExplorePlanetsMode(sun);
+                    }
+                    
                     showPlanetInfo(clickedObject.userData);
+                } else {
+                    // Clicking on empty space while in explore mode exits it
+                    if (explorePlanetsMode) {
+                        deactivateExplorePlanetsMode();
+                        triggerHaptic('light');
+                    }
                 }
             }
             
@@ -1678,9 +1704,13 @@
             triggerHaptic('medium');
             
             if (explorePlanetsMode) {
-                // If no planet selected, use Earth as default
-                const defaultPlanet = selectedPlanetForExplore || planets.find(p => p.userData && p.userData.name && p.userData.name.en === 'Earth');
-                activateExplorePlanetsMode(defaultPlanet);
+                // If observing from sun, explore the sun; otherwise use selected planet or Earth as default
+                if (observationCenter === 'sun') {
+                    activateExplorePlanetsMode(sun);
+                } else {
+                    const defaultPlanet = selectedPlanetForExplore || planets.find(p => p.userData && p.userData.name && p.userData.name.en === 'Earth');
+                    activateExplorePlanetsMode(defaultPlanet);
+                }
             } else {
                 deactivateExplorePlanetsMode();
             }
@@ -1697,50 +1727,75 @@
             if (!selectedPlanet) return;
             
             const selectedPlanetName = selectedPlanet.userData && selectedPlanet.userData.name && selectedPlanet.userData.name.en;
+            const isExploringFromSun = selectedPlanet === sun;
             
             // Hide all objects first
             scene.children.forEach(child => {
                 if (child.userData.type === 'asteroid') {
                     child.visible = false;
                 } else if (child === sun) {
-                    child.visible = false;
+                    child.visible = true; // Always show the sun in explore mode
                 } else if (child.userData.type === 'orbit') {
                     child.visible = false; // Hide all orbits initially
                 }
             });
             
-            // Hide all planets except the selected one
-            planets.forEach(planet => {
-                planet.visible = (planet === selectedPlanet);
-            });
-            
-            // Show only moons of the selected planet and their orbits
-            moons.forEach(moon => {
-                const moonParent = moon.userData.parent;
-                moon.visible = (moonParent === selectedPlanetName);
-            });
-            
-            // Show only the orbit of the selected planet and its moons
-            scene.children.forEach(child => {
-                if (child.userData.type === 'orbit') {
-                    const orbitPlanet = child.userData.planet;
-                    const orbitParent = child.userData.parent;
-                    
-                    // Show orbit if it belongs to selected planet or its moons
-                    child.visible = (orbitPlanet === selectedPlanetName || orbitParent === selectedPlanetName);
-                }
-            });
+            if (isExploringFromSun) {
+                // When exploring from the sun, show all planets orbiting around it
+                planets.forEach(planet => {
+                    planet.visible = true;
+                });
+                
+                // Show all planet orbits when exploring from sun
+                scene.children.forEach(child => {
+                    if (child.userData.type === 'orbit' && !child.userData.isMoonOrbit) {
+                        child.visible = true;
+                    }
+                });
+                
+                // Show all moons
+                moons.forEach(moon => {
+                    moon.visible = showMoons;
+                });
+                
+                // Center camera on the sun
+                camera.position.set(0, 50, 100);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            } else {
+                // Hide all planets except the selected one
+                planets.forEach(planet => {
+                    planet.visible = (planet === selectedPlanet);
+                });
+                
+                // Show only moons of the selected planet and their orbits
+                moons.forEach(moon => {
+                    const moonParent = moon.userData.parent;
+                    moon.visible = (moonParent === selectedPlanetName);
+                });
+                
+                // Show only the orbit of the selected planet and its moons
+                scene.children.forEach(child => {
+                    if (child.userData.type === 'orbit') {
+                        const orbitPlanet = child.userData.planet;
+                        const orbitParent = child.userData.parent;
+                        
+                        // Show orbit if it belongs to selected planet or its moons
+                        child.visible = (orbitPlanet === selectedPlanetName || orbitParent === selectedPlanetName);
+                    }
+                });
+                
+                // Center camera on the selected planet
+                const planetPos = selectedPlanet.position;
+                camera.position.set(planetPos.x, planetPos.y + 20, planetPos.z + 30);
+                controls.target.set(planetPos.x, planetPos.y, planetPos.z);
+                controls.update();
+            }
             
             // Hide asteroids
             asteroids.forEach(asteroid => {
                 asteroid.visible = false;
             });
-            
-            // Center camera on the selected planet
-            const planetPos = selectedPlanet.position;
-            camera.position.set(planetPos.x, planetPos.y + 20, planetPos.z + 30);
-            controls.target.set(planetPos.x, planetPos.y, planetPos.z);
-            controls.update();
             
             // Update button text
             const button = document.getElementById('explore-planets');
