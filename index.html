@@ -1259,16 +1259,28 @@
                     speed: data.speed
                 };
                 
-                // Add orbit line
-                const orbitGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 64);
-                const orbitMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x444444, 
-                    side: THREE.DoubleSide,
+                // Add orbit line (dotted track lines)
+                const orbitPoints = [];
+                const segments = 120; // Number of segments for dotted effect
+                for (let i = 0; i <= segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2;
+                    const x = Math.cos(angle) * data.distance;
+                    const z = Math.sin(angle) * data.distance;
+                    orbitPoints.push(new THREE.Vector3(x, 0, z));
+                }
+                
+                const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+                const orbitMaterial = new THREE.LineDashedMaterial({
+                    color: 0x88AAFF,
                     transparent: true,
-                    opacity: 0.3
+                    opacity: 0.8,
+                    dashSize: 2,
+                    gapSize: 1,
+                    linewidth: 3
                 });
-                const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
-                orbit.rotation.x = Math.PI / 2;
+                
+                const orbit = new THREE.Line(orbitGeometry, orbitMaterial);
+                orbit.computeLineDistances(); // Required for dashed lines
                 orbit.userData = { type: 'orbit' };
                 scene.add(orbit);
                 
