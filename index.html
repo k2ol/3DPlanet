@@ -1397,6 +1397,11 @@
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
             
+            // Double-tap detection for mobile devices
+            let lastTapTime = 0;
+            let tapCount = 0;
+            const doubleTapDelay = 300; // milliseconds
+            
             // Handle both click and touch events
             function handleInteraction(event) {
                 let clientX, clientY;
@@ -1406,11 +1411,21 @@
                     clientX = event.changedTouches[0].clientX;
                     clientY = event.changedTouches[0].clientY;
                     
+                    // Double-tap detection for mobile devices
+                    const currentTime = Date.now();
+                    if (currentTime - lastTapTime < doubleTapDelay) {
+                        tapCount++;
+                    } else {
+                        tapCount = 1;
+                    }
+                    lastTapTime = currentTime;
+                    
                     // Haptic feedback for planet selection
                     triggerHaptic('medium');
                 } else {
                     clientX = event.clientX;
                     clientY = event.clientY;
+                    tapCount = 2; // Desktop clicks are treated as double-tap for consistency
                 }
                 
                 mouse.x = (clientX / window.innerWidth) * 2 - 1;
@@ -1434,14 +1449,21 @@
                         }
                     }
                     
-                    // Check if we're in explore mode and clicking on a planet's outer edge
+                    // In explore mode, handle planet interactions based on device type
                     if (explorePlanetsMode && planets.includes(clickedObject)) {
-                        const planetCenter = clickedObject.position;
-                        const planetRadius = clickedObject.userData.data.radius;
-                        const distanceFromCenter = intersectionPoint.distanceTo(planetCenter);
-                        
-                        // If clicking on outer 30% of planet surface, exit explore mode
-                        if (distanceFromCenter > planetRadius * 0.7) {
+                        // For mobile devices, require double-tap to exit
+                        if (isMobileDevice() || isTabletDevice()) {
+                            if (tapCount >= 2) {
+                                deactivateExplorePlanetsMode();
+                                triggerHaptic('success'); // Success feedback for exiting
+                                return; // Don't show planet info when exiting
+                            } else {
+                                // Single tap - just show planet info, don't exit
+                                showPlanetInfo(clickedObject.userData);
+                                return;
+                            }
+                        } else {
+                            // Desktop - single click exits (original behavior)
                             deactivateExplorePlanetsMode();
                             triggerHaptic('success'); // Success feedback for exiting
                             return; // Don't show planet info when exiting
@@ -1462,8 +1484,17 @@
                 } else {
                     // Clicking on empty space while in explore mode exits it
                     if (explorePlanetsMode) {
-                        deactivateExplorePlanetsMode();
-                        triggerHaptic('light');
+                        // For mobile devices, require double-tap on empty space too
+                        if (isMobileDevice() || isTabletDevice()) {
+                            if (tapCount >= 2) {
+                                deactivateExplorePlanetsMode();
+                                triggerHaptic('light');
+                            }
+                        } else {
+                            // Desktop - single click exits
+                            deactivateExplorePlanetsMode();
+                            triggerHaptic('light');
+                        }
                     }
                 }
             }
