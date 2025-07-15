@@ -795,6 +795,7 @@
                 <button id="toggle-orbits" onclick="toggleOrbits()" data-en="Hide Orbits" data-zh="隐藏轨道">Hide Orbits</button>
                 <button id="toggle-moons" onclick="toggleMoons()" data-en="Hide Moons" data-zh="隐藏卫星">Hide Moons</button>
                 <button id="toggle-asteroids" onclick="toggleAsteroids()" data-en="Hide Asteroids" data-zh="隐藏小行星">Hide Asteroids</button>
+                <button id="explore-planets" onclick="toggleExplorePlanetsMode()" data-en="Explore Planets" data-zh="探索行星">Explore Planets</button>
             </div>
             
             <div class="control-group">
@@ -842,6 +843,8 @@
         let cameraOffset = { x: 0, y: 20, z: 50 };
         let showTooltip = true;
         let hapticEnabled = true;
+        let explorePlanetsMode = false;
+        let selectedPlanetForExplore = null;
 
         // Planet data
         const planetData = {
@@ -1214,7 +1217,7 @@
 
         function createStars() {
             const starsGeometry = new THREE.BufferGeometry();
-            const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.5 });
+            const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF });
             
             const starsVertices = [];
             for (let i = 0; i < 10000; i++) {
@@ -1231,10 +1234,9 @@
 
         function createSun() {
             const sunGeometry = new THREE.SphereGeometry(planetData.sun.radius, 32, 32);
-            const sunMaterial = new THREE.MeshBasicMaterial({ 
+            const sunMaterial = new THREE.MeshLambertMaterial({ 
                 color: planetData.sun.color,
-                emissive: planetData.sun.color,
-                emissiveIntensity: 0.3
+                emissive: planetData.sun.color
             });
             sun = new THREE.Mesh(sunGeometry, sunMaterial);
             sun.userData = { planetKey: 'sun', data: planetData.sun };
@@ -1253,6 +1255,7 @@
                 planet.position.x = data.distance;
                 planet.userData = { 
                     planetKey: key,
+                    name: data.name,
                     data: data,
                     angle: Math.random() * Math.PI * 2,
                     distance: data.distance,
@@ -1275,13 +1278,15 @@
                     transparent: true,
                     opacity: 0.8,
                     dashSize: 2,
-                    gapSize: 1,
-                    linewidth: 3
+                    gapSize: 1
                 });
                 
                 const orbit = new THREE.Line(orbitGeometry, orbitMaterial);
                 orbit.computeLineDistances(); // Required for dashed lines
-                orbit.userData = { type: 'orbit' };
+                orbit.userData = { 
+                    type: 'orbit',
+                    planet: data.name.en
+                };
                 scene.add(orbit);
                 
                 // Add rings for Saturn
@@ -1324,8 +1329,37 @@
                         distance: moonData.distance,
                         speed: moonData.speed,
                         parentDistance: planetData_item.distance,
+                        parent: planetData_item.name.en,
                         type: 'moon'
                     };
+                    
+                    // Create moon orbit
+                    const moonOrbitPoints = [];
+                    const segments = 60;
+                    for (let i = 0; i <= segments; i++) {
+                        const angle = (i / segments) * Math.PI * 2;
+                        const x = Math.cos(angle) * moonData.distance;
+                        const z = Math.sin(angle) * moonData.distance;
+                        moonOrbitPoints.push(new THREE.Vector3(x, 0, z));
+                    }
+                    
+                    const moonOrbitGeometry = new THREE.BufferGeometry().setFromPoints(moonOrbitPoints);
+                    const moonOrbitMaterial = new THREE.LineDashedMaterial({
+                        color: 0xAABBFF,
+                        transparent: true,
+                        opacity: 0.6,
+                        dashSize: 1,
+                        gapSize: 0.5
+                    });
+                    
+                    const moonOrbit = new THREE.Line(moonOrbitGeometry, moonOrbitMaterial);
+                    moonOrbit.computeLineDistances();
+                    moonOrbit.userData = { 
+                        type: 'orbit',
+                        parent: planetData_item.name.en,
+                        isMoonOrbit: true
+                    };
+                    scene.add(moonOrbit);
                     
                     moons.push(moon);
                     scene.add(moon);
@@ -1397,6 +1431,11 @@
                         } else if (moons.includes(clickedObject)) {
                             triggerHaptic('light'); // Moons get light feedback
                         }
+                    }
+                    
+                    // Activate Explore Planets mode when clicking on a planet
+                    if (planets.includes(clickedObject)) {
+                        activateExplorePlanetsMode(clickedObject);
                     }
                     
                     showPlanetInfo(clickedObject.userData);
@@ -1471,6 +1510,16 @@
                             moon.position.set(moonX, 0, moonZ);
                         } else {
                             moon.position.set(moonX, 0, 0);
+                        }
+                    }
+                });
+                
+                // Move moon orbits with their parent planets
+                scene.children.forEach(child => {
+                    if (child.userData.type === 'orbit' && child.userData.isMoonOrbit) {
+                        const parentPlanet = planets.find(p => p.userData && p.userData.name && p.userData.name.en === child.userData.parent);
+                        if (parentPlanet) {
+                            child.position.copy(parentPlanet.position);
                         }
                     }
                 });
@@ -1621,6 +1670,123 @@
                 (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
         }
 
+        function toggleExplorePlanetsMode() {
+            explorePlanetsMode = !explorePlanetsMode;
+            const button = document.getElementById('explore-planets');
+            
+            // Haptic feedback for toggle action
+            triggerHaptic('medium');
+            
+            if (explorePlanetsMode) {
+                // If no planet selected, use Earth as default
+                const defaultPlanet = selectedPlanetForExplore || planets.find(p => p.userData && p.userData.name && p.userData.name.en === 'Earth');
+                activateExplorePlanetsMode(defaultPlanet);
+            } else {
+                deactivateExplorePlanetsMode();
+            }
+            
+            button.textContent = explorePlanetsMode ? 
+                (currentLanguage === 'en' ? 'Exit Explore' : '退出探索') : 
+                (currentLanguage === 'en' ? 'Explore Planets' : '探索行星');
+        }
+
+        function activateExplorePlanetsMode(selectedPlanet) {
+            explorePlanetsMode = true;
+            selectedPlanetForExplore = selectedPlanet;
+            
+            if (!selectedPlanet) return;
+            
+            const selectedPlanetName = selectedPlanet.userData && selectedPlanet.userData.name && selectedPlanet.userData.name.en;
+            
+            // Hide all objects first
+            scene.children.forEach(child => {
+                if (child.userData.type === 'asteroid') {
+                    child.visible = false;
+                } else if (child === sun) {
+                    child.visible = false;
+                } else if (child.userData.type === 'orbit') {
+                    child.visible = false; // Hide all orbits initially
+                }
+            });
+            
+            // Hide all planets except the selected one
+            planets.forEach(planet => {
+                planet.visible = (planet === selectedPlanet);
+            });
+            
+            // Show only moons of the selected planet and their orbits
+            moons.forEach(moon => {
+                const moonParent = moon.userData.parent;
+                moon.visible = (moonParent === selectedPlanetName);
+            });
+            
+            // Show only the orbit of the selected planet and its moons
+            scene.children.forEach(child => {
+                if (child.userData.type === 'orbit') {
+                    const orbitPlanet = child.userData.planet;
+                    const orbitParent = child.userData.parent;
+                    
+                    // Show orbit if it belongs to selected planet or its moons
+                    child.visible = (orbitPlanet === selectedPlanetName || orbitParent === selectedPlanetName);
+                }
+            });
+            
+            // Hide asteroids
+            asteroids.forEach(asteroid => {
+                asteroid.visible = false;
+            });
+            
+            // Center camera on the selected planet
+            const planetPos = selectedPlanet.position;
+            camera.position.set(planetPos.x, planetPos.y + 20, planetPos.z + 30);
+            controls.target.set(planetPos.x, planetPos.y, planetPos.z);
+            controls.update();
+            
+            // Update button text
+            const button = document.getElementById('explore-planets');
+            button.textContent = currentLanguage === 'en' ? 'Exit Explore' : '退出探索';
+        }
+
+        function deactivateExplorePlanetsMode() {
+            explorePlanetsMode = false;
+            selectedPlanetForExplore = null;
+            
+            // Restore all planets visibility
+            planets.forEach(planet => {
+                planet.visible = true;
+            });
+            
+            // Restore all moons visibility based on current settings
+            moons.forEach(moon => {
+                moon.visible = showMoons;
+            });
+            
+            // Restore normal visibility based on current settings
+            scene.children.forEach(child => {
+                if (child.userData.type === 'asteroid') {
+                    child.visible = showAsteroids;
+                } else if (child === sun) {
+                    child.visible = true;
+                } else if (child.userData.type === 'orbit') {
+                    child.visible = showOrbits;
+                }
+            });
+            
+            // Restore asteroids visibility
+            asteroids.forEach(asteroid => {
+                asteroid.visible = showAsteroids;
+            });
+            
+            // Reset camera to default position
+            camera.position.set(0, 20, 50);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            // Update button text
+            const button = document.getElementById('explore-planets');
+            button.textContent = currentLanguage === 'en' ? 'Explore Planets' : '探索行星';
+        }
+
         function toggleHaptic() {
             hapticEnabled = !hapticEnabled;
             const button = document.getElementById('toggle-haptic');
@@ -1743,6 +1909,11 @@
             asteroidBtn.textContent = showAsteroids ? 
                 (currentLanguage === 'en' ? 'Hide Asteroids' : '隐藏小行星') : 
                 (currentLanguage === 'en' ? 'Show Asteroids' : '显示小行星');
+            
+            const exploreBtn = document.getElementById('explore-planets');
+            exploreBtn.textContent = explorePlanetsMode ? 
+                (currentLanguage === 'en' ? 'Exit Explore' : '退出探索') : 
+                (currentLanguage === 'en' ? 'Explore Planets' : '探索行星');
         }
 
         function updateObservationTooltip(centerKey) {
@@ -2013,7 +2184,16 @@
         });
 
         // Initialize when page loads
-        window.addEventListener('load', init);
+        window.addEventListener('load', function() {
+            try {
+                init();
+            } catch (error) {
+                const loadingDiv = document.getElementById('loading');
+                if (loadingDiv) {
+                    loadingDiv.innerHTML = '<div class="spinner"></div><p>Error loading solar system: ' + (error.message || 'Unknown error') + '</p>';
+                }
+            }
+        });
     </script>
 </body>
 </html>
