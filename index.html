@@ -1737,6 +1737,8 @@
                     child.visible = true; // Always show the sun in explore mode
                 } else if (child.userData.type === 'orbit') {
                     child.visible = false; // Hide all orbits initially
+                } else if (child.userData.type === 'rings') {
+                    child.visible = false; // Hide all rings initially
                 }
             });
             
@@ -1785,6 +1787,14 @@
                     }
                 });
                 
+                // Show Saturn's rings only when exploring Saturn
+                scene.children.forEach(child => {
+                    if (child.userData.type === 'rings') {
+                        const ringParent = child.userData.parent;
+                        child.visible = (ringParent === selectedPlanet && selectedPlanetName === 'Saturn');
+                    }
+                });
+                
                 // Center camera on the selected planet
                 const planetPos = selectedPlanet.position;
                 camera.position.set(planetPos.x, planetPos.y + 20, planetPos.z + 30);
@@ -1824,6 +1834,8 @@
                     child.visible = true;
                 } else if (child.userData.type === 'orbit') {
                     child.visible = showOrbits;
+                } else if (child.userData.type === 'rings') {
+                    child.visible = true; // Always show Saturn's rings in normal mode
                 }
             });
             
